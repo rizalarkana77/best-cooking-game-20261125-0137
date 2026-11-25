@@ -1,0 +1,612 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Golden Ladle Rush — a timed order cooking game</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body {
+    font-family: "Trebuchet MS", "Segoe UI", Verdana, sans-serif;
+    background: #2b1d12;
+    color: #fff7e8;
+    overflow: hidden;
+    user-select: none;
+  }
+  #app { width: 1280px; height: 720px; margin: 0 auto; position: relative;
+    background: linear-gradient(#6b4a2f 0 0) no-repeat, linear-gradient(180deg, #7a5233 0%, #5d3d24 55%, #4a2e1a 100%);
+    display: flex; flex-direction: column; }
+  /* ---------- top bar ---------- */
+  header { display: flex; align-items: center; gap: 14px; padding: 8px 16px;
+    background: #3a2413; border-bottom: 3px solid #ffb347; }
+  header .logo { font-size: 26px; font-weight: 900; letter-spacing: 1px; color: #ffd76a;
+    text-shadow: 2px 2px 0 #7a3c00; white-space: nowrap; }
+  header .logo small { display: block; font-size: 11px; letter-spacing: 3px; color: #ffb347; }
+  .stat { background: #2b1a0c; border: 2px solid #8a5a2e; border-radius: 10px; padding: 4px 12px;
+    text-align: center; min-width: 86px; }
+  .stat .lbl { font-size: 10px; letter-spacing: 2px; color: #d9a066; }
+  .stat .val { font-size: 22px; font-weight: 900; color: #fff; line-height: 1.05; }
+  #timerBox { min-width: 110px; border-color: #ffb347; }
+  #timerBox .val { color: #ffd76a; }
+  #timerBox.low .val { color: #ff5a4e; animation: blink .5s steps(2) infinite; }
+  @keyframes blink { 50% { opacity: .35; } }
+  #comboBox .val { color: #7dff9e; }
+  .spacer { flex: 1; }
+  .btn { cursor: pointer; border: none; border-radius: 10px; padding: 8px 16px; font: inherit;
+    font-weight: 800; color: #3a1c00; background: linear-gradient(#ffd76a, #ffb347);
+    box-shadow: 0 3px 0 #b26a00; }
+  .btn:active { transform: translateY(2px); box-shadow: 0 1px 0 #b26a00; }
+  .btn.ghost { background: #5d3d24; color: #ffd76a; box-shadow: 0 3px 0 #2b1a0c; border: 2px solid #8a5a2e; }
+  /* ---------- order board ---------- */
+  #orders { display: flex; gap: 12px; padding: 10px 16px 4px; }
+  #orders .board-label { writing-mode: vertical-rl; transform: rotate(180deg); font-size: 11px;
+    letter-spacing: 3px; color: #ffd76a; font-weight: 900; text-align: center; }
+  .ticket { flex: 1; background: #fff7e8; color: #3a1c00; border-radius: 8px; padding: 8px 10px 6px;
+    border-top: 6px solid #ffb347; box-shadow: 0 4px 0 rgba(0,0,0,.35); position: relative; min-height: 96px; }
+  .ticket.empty { background: #6b4a2f; border: 2px dashed #8a5a2e; border-top: 6px solid #8a5a2e;
+    color: #c9a06a; display: flex; align-items: center; justify-content: center; font-style: italic; }
+  .ticket .dish { font-weight: 900; font-size: 17px; }
+  .ticket .pts { position: absolute; top: 8px; right: 10px; font-weight: 900; color: #b26a00; font-size: 14px; }
+  .ticket .needs { display: flex; gap: 6px; margin-top: 6px; }
+  .ticket .need { width: 40px; height: 40px; border-radius: 8px; background: #ffe9c4; border: 2px solid #e0a44f;
+    display: flex; align-items: center; justify-content: center; font-size: 24px; position: relative; }
+  .ticket .need.done { background: #c9f5c9; border-color: #3f9e4d; }
+  .ticket .need.done::after { content: "✓"; position: absolute; right: 1px; bottom: -2px;
+    color: #2c7a35; font-size: 16px; font-weight: 900; }
+  .ticket .patience { height: 8px; background: #e8cfa5; border-radius: 4px; margin-top: 8px; overflow: hidden; }
+  .ticket .patience i { display: block; height: 100%; background: linear-gradient(90deg, #7dff9e, #ffd76a, #ff5a4e);
+    background-size: 120px 100%; transition: width .2s linear; }
+  .ticket .num { position: absolute; left: -6px; top: -10px; width: 26px; height: 26px; border-radius: 50%;
+    background: #ff5a4e; color: #fff; font-weight: 900; display: flex; align-items: center; justify-content: center;
+    border: 2px solid #fff7e8; font-size: 14px; }
+  .ticket.match { outline: 4px solid #7dff9e; animation: pulse 1s ease-in-out infinite; }
+  @keyframes pulse { 50% { outline-color: #2c7a35; } }
+  /* ---------- kitchen ---------- */
+  #kitchen { flex: 1; display: flex; gap: 14px; padding: 8px 16px; }
+  .station { background: #8a5a2e; border: 3px solid #5d3d24; border-radius: 12px; padding: 8px;
+    box-shadow: inset 0 2px 0 rgba(255,255,255,.15), 0 4px 0 rgba(0,0,0,.3); }
+  .station h3 { font-size: 12px; letter-spacing: 2px; color: #ffd76a; text-align: center; margin-bottom: 6px; }
+  .station .hint { font-size: 11px; color: #e8cfa5; text-align: center; margin-top: 6px; }
+  #stove { width: 300px; }
+  #board { width: 250px; }
+  .slots { display: flex; gap: 10px; justify-content: center; }
+  .slot { width: 118px; height: 118px; border-radius: 50%; background: #3a2413; border: 4px solid #2b1a0c;
+    display: flex; align-items: center; justify-content: center; font-size: 52px; position: relative;
+    cursor: pointer; }
+  .slot.empty { font-size: 15px; color: #8a6a44; }
+  .slot .prog { position: absolute; left: 6px; right: 6px; bottom: 10px; height: 10px; background: #241408;
+    border-radius: 5px; overflow: hidden; }
+  .slot .prog i { display: block; height: 100%; background: #ff8c1a; }
+  .slot.done { border-color: #7dff9e; box-shadow: 0 0 14px #7dff9e; cursor: pointer; }
+  .slot.burnt { border-color: #ff5a4e; }
+  .slot .tag { position: absolute; top: -8px; left: 50%; transform: translateX(-50%); font-size: 10px;
+    font-weight: 900; background: #7dff9e; color: #1d4d24; padding: 1px 8px; border-radius: 8px; white-space: nowrap; }
+  .slot .tag.burnt { background: #ff5a4e; color: #fff; }
+  .chopslot { border-radius: 12px; width: 104px; height: 104px; }
+  /* plate */
+  #plateArea { flex: 1; display: flex; flex-direction: column; align-items: center; }
+  #plate { width: 250px; height: 250px; border-radius: 50%; background: radial-gradient(circle at 50% 38%, #fffdf5 0 58%, #e8ddc2 58% 72%, #cbb98f 72% 100%);
+    border: 4px solid #b3a06f; position: relative; cursor: pointer;
+    box-shadow: 0 8px 0 rgba(0,0,0,.35); display: flex; align-items: center; justify-content: center; }
+  #plate .dish-stack { display: flex; flex-direction: column-reverse; align-items: center; gap: 0; }
+  #plate .ing { font-size: 44px; line-height: .85; text-shadow: 0 2px 2px rgba(0,0,0,.25); cursor: pointer; }
+  #plate .ing:hover { filter: brightness(1.25); }
+  #plate .empty-msg { color: #a08a5f; font-size: 15px; font-weight: 700; text-align: center; line-height: 1.4; }
+  #serveBtn { margin-top: 10px; font-size: 20px; padding: 10px 34px; }
+  #serveBtn.ready { animation: pulse 0.8s ease-in-out infinite; background: linear-gradient(#9dffab, #4ecb5d); color: #0d3d14; box-shadow: 0 3px 0 #1d6b28; }
+  #serveBtn:disabled { opacity: .45; cursor: default; animation: none; }
+  /* ---------- ingredient counter ---------- */
+  #counter { padding: 6px 16px 12px; }
+  #counter .rail { background: #a9743f; border: 3px solid #5d3d24; border-radius: 12px; padding: 8px 10px;
+    display: flex; gap: 10px; box-shadow: 0 4px 0 rgba(0,0,0,.3); }
+  .bin { flex: 1; background: #fff7e8; color: #3a1c00; border-radius: 10px; padding: 6px 4px 4px; text-align: center;
+    cursor: pointer; border: 3px solid #e0a44f; position: relative; }
+  .bin:hover { border-color: #ffd76a; transform: translateY(-2px); }
+  .bin .ico { font-size: 34px; line-height: 1; }
+  .bin .name { font-weight: 900; font-size: 13px; }
+  .bin .prep { font-size: 10px; color: #8a5a2e; font-weight: 700; }
+  .bin .key { position: absolute; top: 4px; left: 6px; font-size: 10px; font-weight: 900; color: #fff;
+    background: #8a5a2e; border-radius: 4px; padding: 1px 5px; }
+  .bin.flash { animation: flash .3s; }
+  @keyframes flash { 50% { background: #ffe9a8; } }
+  /* ---------- toast / overlays ---------- */
+  #toast { position: absolute; left: 50%; top: 44%; transform: translate(-50%,-50%); font-size: 40px; font-weight: 900;
+    color: #ffd76a; text-shadow: 3px 3px 0 #7a3c00, 0 0 24px rgba(255,180,60,.6); opacity: 0; pointer-events: none;
+    transition: opacity .15s; z-index: 30; text-align: center; }
+  #toast.show { opacity: 1; }
+  #toast.bad { color: #ff8a80; text-shadow: 3px 3px 0 #5d0d0d; }
+  .overlay { position: absolute; inset: 0; background: rgba(20,10,2,.82); display: flex; align-items: center;
+    justify-content: center; z-index: 40; }
+  .overlay.hidden { display: none; }
+  .card { background: #fff7e8; color: #3a1c00; border-radius: 16px; padding: 28px 36px; width: 640px;
+    text-align: center; border-top: 8px solid #ffb347; box-shadow: 0 12px 40px rgba(0,0,0,.6); }
+  .card h1 { font-size: 44px; color: #b26a00; letter-spacing: 1px; }
+  .card h2 { font-size: 15px; letter-spacing: 4px; color: #8a5a2e; margin: 2px 0 12px; }
+  .card p { font-size: 15px; line-height: 1.55; margin: 8px 0; }
+  .card .rules { text-align: left; font-size: 14px; line-height: 1.8; margin: 10px 24px; }
+  .card .big { font-size: 56px; font-weight: 900; color: #b26a00; }
+  .card .row { display: flex; gap: 12px; justify-content: center; margin-top: 14px; }
+  .card .statline { display: flex; gap: 18px; justify-content: center; margin: 12px 0; }
+  .card .statline div b { display: block; font-size: 26px; }
+  .card .statline div span { font-size: 11px; letter-spacing: 2px; color: #8a5a2e; }
+  #footer { text-align: center; font-size: 11px; color: #c9a06a; padding: 2px 0 6px; }
+  kbd { background: #3a2413; color: #ffd76a; border-radius: 4px; padding: 0 5px; font: inherit; font-weight: 900; }
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <div class="logo">🍳 GOLDEN LADLE RUSH<small>RUSH-HOUR KITCHEN</small></div>
+    <div class="stat"><div class="lbl">SCORE</div><div class="val" id="score">0</div></div>
+    <div class="stat"><div class="lbl">SERVED</div><div class="val" id="served">0</div></div>
+    <div class="stat"><div class="lbl">COMBO</div><div class="val" id="combo">×1</div></div>
+    <div class="stat" id="timerBox"><div class="lbl">SHIFT TIMER</div><div class="val" id="timer">2:30</div></div>
+    <div class="spacer"></div>
+    <button class="btn ghost" id="muteBtn">🔊 Sound on</button>
+    <button class="btn ghost" id="restartBtn">↻ Restart</button>
+  </header>
+
+  <div id="orders"><div class="board-label">ORDER BOARD</div></div>
+
+  <div id="kitchen">
+    <div class="station" id="stove">
+      <h3>🔥 STOVE — 2 PANS</h3>
+      <div class="slots">
+        <div class="slot empty" id="pan0">empty pan</div>
+        <div class="slot empty" id="pan1">empty pan</div>
+      </div>
+      <div class="hint">Raw patty &amp; egg go here.<br>Click a golden pan to plate it.<br>Leave it too long and it burns!</div>
+    </div>
+
+    <div class="station" id="board">
+      <h3>🔪 CHOPPING BOARD</h3>
+      <div class="slots">
+        <div class="slot chopslot empty" id="chop0">empty board</div>
+        <div class="slot chopslot empty" id="chop1">empty board</div>
+      </div>
+      <div class="hint">Lettuce &amp; tomato go here.<br>Click twice to chop, then<br>click again to plate it.</div>
+    </div>
+
+    <div id="plateArea">
+      <div class="station" style="background:none;border:none;box-shadow:none;padding:0;">
+        <h3 style="color:#ffd76a;">🍽️ YOUR PLATE — DISH IN PROGRESS</h3>
+      </div>
+      <div id="plate" title="Click an ingredient on the plate to remove it">
+        <div class="empty-msg" id="plateEmpty">Your plate is empty.<br>Add ingredients from<br>the counter below!</div>
+        <div class="dish-stack" id="dishStack"></div>
+      </div>
+      <button class="btn" id="serveBtn" disabled>🍽️ SERVE DISH</button>
+    </div>
+  </div>
+
+  <div id="counter"><div class="rail" id="bins"></div></div>
+  <div id="footer">Click bins or press <kbd>1</kbd>–<kbd>6</kbd> to add ingredients · <kbd>Space</kbd> serve · <kbd>T</kbd> clear plate · <kbd>R</kbd> restart · Click a plate ingredient to remove it</div>
+
+  <div id="toast"></div>
+
+  <div class="overlay" id="startOverlay">
+    <div class="card">
+      <h1>🍳 Golden Ladle Rush</h1>
+      <h2>RUSH-HOUR KITCHEN · 2:30 SHIFT</h2>
+      <p>The lunch rush is on! Orders fly in on the board — build each dish on your plate
+      and serve it before the customer's patience runs out.</p>
+      <div class="rules">
+        🥩🍳 <b>Cook</b> raw patty &amp; egg in a pan — click when golden, before it burns.<br>
+        🥬🍅 <b>Chop</b> lettuce &amp; tomato on the board — two clicks, then plate it.<br>
+        🍞🧀 <b>Bun &amp; cheese</b> go straight on the plate.<br>
+        ✅ Serve the <b>exact</b> recipe — a wrong dish costs 25 points.<br>
+        🔥 Consecutive perfect serves build your <b>combo</b> multiplier.
+      </div>
+      <div class="row"><button class="btn" id="startBtn" style="font-size:20px;padding:12px 40px;">▶ START SHIFT</button></div>
+      <p style="font-size:12px;color:#8a5a2e;">Mouse + keyboard · works fully offline · an original game</p>
+    </div>
+  </div>
+
+  <div class="overlay hidden" id="endOverlay">
+    <div class="card">
+      <h1>⏰ Shift Over!</h1>
+      <h2 id="endTitle">THE KITCHEN CLOSES</h2>
+      <div class="big" id="finalScore">0</div>
+      <div class="statline">
+        <div><b id="finalServed">0</b><span>DISHES SERVED</span></div>
+        <div><b id="finalBest">×1</b><span>BEST COMBO</span></div>
+        <div><b id="finalAcc">0%</b><span>ACCURACY</span></div>
+      </div>
+      <p id="endMsg"></p>
+      <div class="row"><button class="btn" id="againBtn" style="font-size:20px;padding:12px 40px;">↻ PLAY AGAIN</button></div>
+    </div>
+  </div>
+</div>
+
+<script>
+"use strict";
+/* Golden Ladle Rush — an original timed order cooking game.
+   No network, no assets: all art is CSS + text glyphs, all sound is WebAudio. */
+
+// ---------- data ----------
+const ING = {
+  bun:    { name: "Bun",     ico: "🍞", prep: "ready",   key: "1" },
+  patty:  { name: "Patty",   ico: "🥩", prep: "pan 4s",  key: "2", cook: "patty" },
+  egg:    { name: "Egg",     ico: "🥚", prep: "pan 3s",  key: "3", cook: "egg" },
+  cheese: { name: "Cheese",  ico: "🧀", prep: "ready",   key: "4" },
+  lettuce:{ name: "Lettuce", ico: "🥬", prep: "chop ×2", key: "5", chop: "lettuce" },
+  tomato: { name: "Tomato",  ico: "🍅", prep: "chop ×2", key: "6", chop: "tomato" },
+};
+const COOKED = { patty: "🍔", egg: "🍳" };
+const CHOPPED = { lettuce: "🥗", tomato: "🍅" };
+const RECIPES = [
+  { name: "Sunny Stack",     needs: ["bun", "egg", "cheese"],           pts: 90 },
+  { name: "Garden Melt",     needs: ["bun", "lettuce", "tomato", "cheese"], pts: 120 },
+  { name: "Ember Burger",    needs: ["bun", "patty", "cheese", "lettuce"],  pts: 140 },
+  { name: "Sunrise Special", needs: ["bun", "egg", "tomato", "lettuce"],    pts: 130 },
+];
+const SHIFT_SECONDS = 150;
+const COOK_TIME = { patty: 4, egg: 3 };      // seconds to golden
+const BURN_TIME = 4;                          // seconds past golden before burnt
+
+// ---------- state ----------
+let S;
+function freshState() {
+  return {
+    running: false, over: false, timeLeft: SHIFT_SECONDS,
+    score: 0, served: 0, combo: 0, bestCombo: 1, attempts: 0, goodServes: 0,
+    plate: [],                 // ingredient keys on the plate, in order added
+    pans: [null, null],        // {kind, t, state:'cooking'|'done'|'burnt'}
+    chops: [null, null],       // {kind, hits}
+    orders: [null, null, null],// {recipe, patience (0..1), id}
+    nextOrderIn: 1.5, orderSeq: 0, muted: false,
+  };
+}
+S = freshState();
+
+// ---------- sound (WebAudio synth, no files) ----------
+let AC = null;
+function ac() { if (!AC) AC = new (window.AudioContext || window.webkitAudioContext)(); return AC; }
+function tone(freq, dur, type, vol, when) {
+  if (S.muted) return;
+  try {
+    const c = ac(), o = c.createOscillator(), g = c.createGain();
+    o.type = type || "sine"; o.frequency.value = freq;
+    g.gain.setValueAtTime(vol || 0.12, c.currentTime + (when || 0));
+    g.gain.exponentialRampToValueAtTime(0.001, c.currentTime + (when || 0) + dur);
+    o.connect(g); g.connect(c.destination);
+    o.start(c.currentTime + (when || 0)); o.stop(c.currentTime + (when || 0) + dur + 0.02);
+  } catch (e) {}
+}
+const sfx = {
+  click()  { tone(520, 0.07, "triangle", 0.10); },
+  add()    { tone(660, 0.08, "sine", 0.12); tone(880, 0.1, "sine", 0.10, 0.06); },
+  chop()   { tone(180, 0.06, "square", 0.10); },
+  sizzle() { tone(1400, 0.25, "sawtooth", 0.03); },
+  ding()   { tone(880, 0.12, "sine", 0.14); tone(1174, 0.18, "sine", 0.14, 0.1); tone(1568, 0.25, "sine", 0.12, 0.2); },
+  bad()    { tone(160, 0.25, "sawtooth", 0.12); tone(120, 0.3, "sawtooth", 0.12, 0.12); },
+  tick()   { tone(1000, 0.05, "square", 0.06); },
+};
+
+// ---------- DOM ----------
+const $ = (id) => document.getElementById(id);
+const ordersEl = $("orders"), binsEl = $("bins"), dishStack = $("dishStack");
+
+// build ingredient bins
+for (const key of Object.keys(ING)) {
+  const d = ING[key];
+  const b = document.createElement("div");
+  b.className = "bin"; b.dataset.key = key;
+  b.innerHTML = '<span class="key">' + d.key + '</span><div class="ico">' + d.ico + '</div>' +
+    '<div class="name">' + d.name + '</div><div class="prep">' +
+    (d.cook ? "🔥 cook " + COOK_TIME[key] + "s" : d.chop ? "🔪 chop ×2" : "✓ ready to plate") + '</div>';
+  b.addEventListener("click", () => addIngredient(key));
+  binsEl.appendChild(b);
+}
+
+// ---------- orders ----------
+function spawnOrder() {
+  const free = S.orders.findIndex((o) => !o);
+  if (free === -1) return;
+  const r = RECIPES[Math.floor(Math.random() * RECIPES.length)];
+  S.orders[free] = { recipe: r, patience: 1, id: ++S.orderSeq };
+  sfx.add();
+}
+function expireOrder(i) {
+  S.orders[i] = null;
+  S.score = Math.max(0, S.score - 15);
+  S.combo = 0;
+  toast("😤 Order walked out! −15", true);
+  sfx.bad();
+}
+
+// ---------- ingredients ----------
+function addIngredient(key) {
+  if (!S.running || S.over) return;
+  const d = ING[key];
+  const bin = binsEl.querySelector('[data-key="' + key + '"]');
+  bin.classList.remove("flash"); void bin.offsetWidth; bin.classList.add("flash");
+  if (d.cook) {
+    const pi = S.pans.findIndex((p) => !p);
+    if (pi === -1) { toast("Both pans are full!", true); sfx.bad(); return; }
+    S.pans[pi] = { kind: key, t: 0, state: "cooking" };
+    sfx.sizzle();
+  } else if (d.chop) {
+    const ci = S.chops.findIndex((c) => !c);
+    if (ci === -1) { toast("Both boards are full!", true); sfx.bad(); return; }
+    S.chops[ci] = { kind: key, hits: 0 };
+    sfx.chop();
+  } else {
+    S.plate.push(key);
+    sfx.add();
+  }
+  render();
+}
+function plateIngredient(kind) {
+  S.plate.push(kind);
+  sfx.add();
+  render();
+}
+function removePlateAt(i) {
+  S.plate.splice(i, 1);
+  sfx.click();
+  render();
+}
+
+// ---------- serving ----------
+function plateMatches(order) {
+  if (!order) return false;
+  const need = order.recipe.needs.slice().sort().join(",");
+  return S.plate.slice().sort().join(",") === need;
+}
+function serve() {
+  if (!S.running || S.over || !S.plate.length) return;
+  S.attempts++;
+  const idx = S.orders.findIndex((o) => plateMatches(o));
+  if (idx === -1) {
+    S.score = Math.max(0, S.score - 25);
+    S.combo = 0;
+    toast("❌ Wrong dish! −25", true);
+    sfx.bad();
+    render();
+    return;
+  }
+  const o = S.orders[idx];
+  S.orders[idx] = null;
+  S.goodServes++;
+  S.combo++;
+  S.bestCombo = Math.max(S.bestCombo, S.combo);
+  const mult = 1 + Math.min(S.combo - 1, 4) * 0.25;
+  const bonus = Math.round(o.patience * 40);
+  const gained = Math.round((o.recipe.pts + bonus) * mult);
+  S.score += gained;
+  S.served++;
+  S.plate = [];
+  toast("✅ " + o.recipe.name + " served! +" + gained + (S.combo > 1 ? "  🔥 combo ×" + mult.toFixed(2) : ""), false);
+  sfx.ding();
+  render();
+}
+
+// ---------- toast ----------
+let toastTimer = null;
+function toast(msg, bad) {
+  const t = $("toast");
+  t.textContent = msg;
+  t.className = "show" + (bad ? " bad" : "");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { t.className = ""; }, 1600);
+}
+
+// ---------- render ----------
+function render() {
+  $("score").textContent = S.score;
+  $("served").textContent = S.served;
+  $("combo").textContent = "×" + (1 + Math.min(Math.max(S.combo - 1, 0), 4) * 0.25).toFixed(2).replace(/\.?0+$/, "");
+  const t = Math.max(0, Math.ceil(S.timeLeft));
+  $("timer").textContent = Math.floor(t / 60) + ":" + String(t % 60).padStart(2, "0");
+  $("timerBox").classList.toggle("low", S.timeLeft <= 30 && S.running);
+
+  // orders
+  ordersEl.querySelectorAll(".ticket").forEach((el) => el.remove());
+  S.orders.forEach((o, i) => {
+    const el = document.createElement("div");
+    if (!o) {
+      el.className = "ticket empty";
+      el.textContent = "waiting for the next order…";
+    } else {
+      const match = plateMatches(o);
+      el.className = "ticket" + (match ? " match" : "");
+      const needs = o.recipe.needs.map((k) => {
+        const done = S.plate.includes(k);
+        return '<div class="need' + (done ? " done" : "") + '" title="' + ING[k].name + '">' + ING[k].ico + "</div>";
+      }).join("");
+      el.innerHTML = '<div class="num">' + (i + 1) + '</div><div class="dish">' + o.recipe.name + '</div>' +
+        '<div class="pts">' + o.recipe.pts + ' pts</div><div class="needs">' + needs + "</div>" +
+        '<div class="patience"><i style="width:' + Math.round(o.patience * 100) + '%"></i></div>';
+    }
+    ordersEl.appendChild(el);
+  });
+
+  // pans
+  S.pans.forEach((p, i) => {
+    const el = $("pan" + i);
+    el.className = "slot" + (p ? (p.state === "done" ? " done" : p.state === "burnt" ? " burnt" : "") : " empty");
+    if (!p) { el.textContent = "empty pan"; return; }
+    const need = COOK_TIME[p.kind];
+    const pct = Math.min(100, Math.round((p.t / need) * 100));
+    const ico = p.state === "burnt" ? "🔥" : p.state === "done" ? COOKED[p.kind] : ING[p.kind].ico;
+    el.innerHTML = ico +
+      (p.state === "done" ? '<span class="tag">READY — click!</span>' :
+       p.state === "burnt" ? '<span class="tag burnt">BURNT — click to toss</span>' :
+       '<div class="prog"><i style="width:' + pct + '%"></i></div>');
+  });
+
+  // chopping boards
+  S.chops.forEach((c, i) => {
+    const el = $("chop" + i);
+    el.className = "slot chopslot" + (c ? (c.hits >= 2 ? " done" : "") : " empty");
+    if (!c) { el.textContent = "empty board"; return; }
+    el.innerHTML = ING[c.kind].ico +
+      (c.hits >= 2 ? '<span class="tag">CHOPPED — click!</span>' :
+       '<div class="prog"><i style="width:' + (c.hits * 50) + '%"></i></div>');
+  });
+
+  // plate
+  $("plateEmpty").style.display = S.plate.length ? "none" : "";
+  dishStack.innerHTML = "";
+  S.plate.forEach((k, i) => {
+    const s = document.createElement("span");
+    // patty/egg only ever reach the plate cooked
+    s.className = "ing"; s.textContent = COOKED[k] || ING[k].ico; s.title = ING[k].name + " — click to remove";
+    s.addEventListener("click", (e) => { e.stopPropagation(); removePlateAt(i); });
+    dishStack.appendChild(s);
+  });
+  const btn = $("serveBtn");
+  const anyMatch = S.orders.some((o) => plateMatches(o));
+  btn.disabled = !S.plate.length;
+  btn.classList.toggle("ready", anyMatch);
+  btn.textContent = anyMatch ? "🍽️ SERVE — PERFECT MATCH!" : "🍽️ SERVE DISH";
+}
+
+// ---------- game loop ----------
+let last = 0;
+function loop(ts) {
+  requestAnimationFrame(loop);
+  if (!S.running || S.over) { last = ts; return; }
+  const dt = Math.min(0.1, (ts - last) / 1000 || 0);
+  last = ts;
+  S.timeLeft -= dt;
+  if (S.timeLeft <= 10.5 && S.timeLeft > 10.4) sfx.tick();
+  if (S.timeLeft <= 0) { S.timeLeft = 0; endGame(); render(); return; }
+
+  // order spawn
+  S.nextOrderIn -= dt;
+  if (S.nextOrderIn <= 0) {
+    if (S.orders.some((o) => !o)) spawnOrder();
+    S.nextOrderIn = 9 + Math.random() * 5;
+  }
+  // patience
+  S.orders.forEach((o, i) => {
+    if (!o) return;
+    o.patience -= dt / 45;
+    if (o.patience <= 0) expireOrder(i);
+  });
+  // pans
+  S.pans.forEach((p) => {
+    if (!p) return;
+    p.t += dt;
+    if (p.state === "cooking" && p.t >= COOK_TIME[p.kind]) { p.state = "done"; sfx.ding(); }
+    else if (p.state === "done" && p.t >= COOK_TIME[p.kind] + BURN_TIME) { p.state = "burnt"; sfx.bad(); }
+  });
+  render();
+}
+
+// ---------- start / end ----------
+function startGame() {
+  S = freshState();
+  S.running = true;
+  $("startOverlay").classList.add("hidden");
+  $("endOverlay").classList.add("hidden");
+  spawnOrder(); spawnOrder();
+  render();
+  toast("🔥 Lunch rush! Serve fast!", false);
+}
+function endGame() {
+  S.running = false; S.over = true;
+  const acc = S.attempts ? Math.round((S.goodServes / S.attempts) * 100) : 100;
+  $("finalScore").textContent = S.score;
+  $("finalServed").textContent = S.served;
+  $("finalBest").textContent = "×" + S.bestCombo;
+  $("finalAcc").textContent = acc + "%";
+  $("endTitle").textContent = S.score >= 800 ? "⭐ GOLDEN LADLE CHEF!" : S.score >= 400 ? "👨‍🍳 SOLID SHIFT, CHEF" : "THE KITCHEN CLOSES";
+  $("endMsg").textContent = S.score >= 800
+    ? "A legendary rush — the whole dining room is chanting your name."
+    : S.score >= 400
+    ? "Good hustle! A few more perfect serves and the Golden Ladle is yours."
+    : "The rush got the better of you this time. Chop faster, serve smarter, try again!";
+  $("endOverlay").classList.remove("hidden");
+  sfx.ding();
+}
+
+// ---------- events ----------
+$("startBtn").addEventListener("click", () => { sfx.click(); startGame(); });
+$("againBtn").addEventListener("click", () => { sfx.click(); startGame(); });
+$("restartBtn").addEventListener("click", () => { sfx.click(); startGame(); });
+$("serveBtn").addEventListener("click", serve);
+$("muteBtn").addEventListener("click", (e) => {
+  S.muted = !S.muted;
+  e.target.textContent = S.muted ? "🔇 Muted" : "🔊 Sound on";
+});
+S.pans.forEach((_, i) => {
+  $("pan" + i).addEventListener("click", () => {
+    const p = S.pans[i];
+    if (!S.running || !p) return;
+    if (p.state === "done") { plateIngredient(p.kind); S.pans[i] = null; }
+    else if (p.state === "burnt") { S.pans[i] = null; S.score = Math.max(0, S.score - 5); toast("🗑️ Burnt! −5", true); sfx.bad(); }
+    else { toast("Still cooking…", true); }
+    render();
+  });
+});
+S.chops.forEach((_, i) => {
+  $("chop" + i).addEventListener("click", () => {
+    const c = S.chops[i];
+    if (!S.running || !c) return;
+    c.hits++;
+    if (c.hits >= 2) { plateIngredient(c.kind); S.chops[i] = null; }
+    else sfx.chop();
+    render();
+  });
+});
+$("plate").addEventListener("click", () => { if (S.plate.length) toast("Click an ingredient to remove just that one", false); });
+document.addEventListener("keydown", (e) => {
+  if (e.key === " ") { e.preventDefault(); serve(); return; }
+  if (e.key === "r" || e.key === "R") { startGame(); return; }
+  if (e.key === "t" || e.key === "T") { S.plate = []; render(); return; }
+  if (e.key === "m" || e.key === "M") { $("muteBtn").click(); return; }
+  const key = Object.keys(ING).find((k) => ING[k].key === e.key);
+  if (key) addIngredient(key);
+});
+
+// ---------- demo states for screenshots (real game code, pre-filled) ----------
+function demoMid() {
+  startGame();
+  S.timeLeft = 107; S.score = 320; S.served = 3; S.combo = 2; S.bestCombo = 2;
+  S.orders = [
+    { recipe: RECIPES[2], patience: 0.72, id: 1 },   // Ember Burger
+    { recipe: RECIPES[0], patience: 0.45, id: 2 },   // Sunny Stack
+    { recipe: RECIPES[1], patience: 0.88, id: 3 },   // Garden Melt
+  ];
+  S.plate = ["bun", "patty", "cheese"];              // Ember Burger mid-assembly
+  S.pans = [{ kind: "egg", t: 2.2, state: "cooking" }, null];
+  S.chops = [{ kind: "tomato", hits: 1 }, null];
+  clearTimeout(toastTimer); $("toast").className = ""; // keep the demo frame clean
+  render();
+}
+function demoServe() {
+  startGame();
+  S.timeLeft = 83; S.score = 540; S.served = 5; S.combo = 3; S.bestCombo = 3;
+  S.orders = [
+    { recipe: RECIPES[0], patience: 0.61, id: 1 },   // Sunny Stack — plate matches
+    { recipe: RECIPES[3], patience: 0.8, id: 2 },
+    null,
+  ];
+  S.plate = ["bun", "egg", "cheese"];                // complete Sunny Stack, ready to serve
+  S.pans = [{ kind: "patty", t: 4.1, state: "done" }, null];
+  S.chops = [null, { kind: "lettuce", hits: 2 }];
+  clearTimeout(toastTimer); $("toast").className = ""; // keep the demo frame clean
+  render();
+}
+function demoEnd() {
+  startGame();
+  S.timeLeft = 0; S.score = 865; S.served = 8; S.combo = 0; S.bestCombo = 4;
+  S.attempts = 9; S.goodServes = 8;
+  endGame();
+  render();
+}
+
+// ---------- boot ----------
+render();
+requestAnimationFrame(loop);
+const q = new URLSearchParams(location.search).get("demo");
+if (q === "mid") demoMid();
+else if (q === "serve") demoServe();
+else if (q === "end") demoEnd();
+</script>
+</body>
+</html>
